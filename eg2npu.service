@@ -1,0 +1,28 @@
+[Unit]
+Description=eg2npu serving EmbeddingGemma 2 text embeddings on the NPU
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+DynamicUser=yes
+# /dev/accel/accel0 (the NPU) and /dev/dri/renderD* (the GPU) belong to render.
+SupplementaryGroups=render
+# The GGUF downloaded by -hf goes in $STATE_DIRECTORY/models, the IR and the
+# compiled models in $CACHE_DIRECTORY.
+StateDirectory=%p
+CacheDirectory=%p
+# The NPU driver keeps its own compiler cache under XDG_CACHE_HOME, and a
+# dynamic user's home is not writable.
+Environment=XDG_CACHE_HOME=%C/%p/xdg
+# Queries alone fit in 64 tokens, and each length costs about 285 MB on the
+# NPU: add lengths (up to 2064, never 512 or 2048) to embed longer text.
+ExecStart=/usr/bin/eg2npu \
+  -hf unsloth/embeddinggemma-2-GGUF:Q8_0 \
+  -device NPU \
+  -lengths 64 \
+  -listen 127.0.0.1:8741
+Restart=on-failure
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,10 @@
+/eg2npu
+/eg2cmp
+/eg2tok
+/ggufdump
+/ovdevices
+/cmd/*/*
+!/cmd/*/*.go
+/pkg/
+/src/
+/*.pkg.tar.*
