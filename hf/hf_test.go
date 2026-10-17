@@ -122,3 +122,39 @@ func TestFetchRefuses(t *testing.T) {
 		}
 	})
 }
+
+func TestFetchFiles(t *testing.T) {
+	r := &repo{files: map[string]string{
+		"int8/a.xml":    "graph",
+		"weights/b.npy": "weights",
+		"c.json":        "{}",
+	}}
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+	f := &Fetcher{Dir: t.TempDir(), Base: srv.URL}
+	want := []string{"int8/a.xml", "weights/b.npy"}
+	dir, err := f.FetchFiles(context.Background(), "owner/m-GGUF", want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "weights", "b.npy")); string(b) != "weights" {
+		t.Fatalf("content = %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "c.json")); err == nil {
+		t.Fatal("fetched a file that was not asked for")
+	}
+	// The second fetch finds the files without the network.
+	srv.Close()
+	again, err := f.FetchFiles(context.Background(), "owner/m-GGUF", want)
+	if err != nil || again != dir {
+		t.Fatalf("second fetch = %s, %v", again, err)
+	}
+	if n := r.downloads.Load(); n != 2 {
+		t.Fatalf("%d downloads, want 2", n)
+	}
+	for _, bad := range []string{"../x", "/etc/passwd", `a\b`} {
+		if _, err := f.FetchFiles(context.Background(), "owner/m-GGUF", []string{bad}); err == nil {
+			t.Errorf("FetchFiles(%q) did not fail", bad)
+		}
+	}
+}

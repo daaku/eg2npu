@@ -1,5 +1,6 @@
 // Package hf downloads a GGUF from a Hugging Face model repository, given as
-// llama-server's -hf takes it: "owner/repo:QUANT".
+// llama-server's -hf takes it: "owner/repo:QUANT", or any set of files from
+// one with FetchFiles.
 package hf
 
 import (
@@ -87,10 +88,63 @@ func (f *Fetcher) Fetch(ctx context.Context, s Spec) (string, error) {
 		return "", err
 	}
 	dst := filepath.Join(dir, path.Base(file.Path))
-	if err := f.download(ctx, s, file, dst); err != nil {
+	if err := f.download(ctx, s.Repo, file, dst); err != nil {
 		return "", err
 	}
 	return dst, nil
+}
+
+// FetchFiles returns the local directory holding the given files of a
+// repository, laid out as they are in it ("int8/model.xml"), downloading the
+// ones not already there. When every file is present the network is not
+// asked, as with Fetch.
+func (f *Fetcher) FetchFiles(ctx context.Context, repo string, files []string) (string, error) {
+	if _, err := ParseSpec(repo); err != nil || strings.Contains(repo, ":") {
+		return "", fmt.Errorf("hf: %q is not owner/repo", repo)
+	}
+	dir := filepath.Join(f.Dir, strings.ReplaceAll(repo, "/", "_"))
+	var missing []string
+	for _, name := range files {
+		if !filepath.IsLocal(name) || strings.Contains(name, "\\") {
+			return "", fmt.Errorf("hf: %q is not a path in a repository", name)
+		}
+		if st, err := os.Stat(filepath.Join(dir, name)); err != nil || !st.Mode().IsRegular() {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) == 0 {
+		return dir, nil
+	}
+	res, err := f.get(ctx, f.base()+"/api/models/"+repo+"/tree/main?recursive=1")
+	if err != nil {
+		return "", err
+	}
+	var tree []treeEntry
+	err = json.NewDecoder(res.Body).Decode(&tree)
+	res.Body.Close()
+	if err != nil {
+		return "", fmt.Errorf("hf: listing %s: %w", repo, err)
+	}
+	byPath := make(map[string]treeEntry, len(tree))
+	for _, e := range tree {
+		if e.Type == "file" {
+			byPath[e.Path] = e
+		}
+	}
+	for _, name := range missing {
+		e, ok := byPath[filepath.ToSlash(name)]
+		if !ok {
+			return "", fmt.Errorf("hf: %s has no %s", repo, name)
+		}
+		dst := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return "", err
+		}
+		if err := f.download(ctx, repo, e, dst); err != nil {
+			return "", err
+		}
+	}
+	return dir, nil
 }
 
 type treeEntry struct {
@@ -167,8 +221,8 @@ func (f *Fetcher) find(ctx context.Context, s Spec) (treeEntry, error) {
 // download writes the file next to dst and renames it into place once its
 // size and sha256 are what the repository says, so an interrupted download
 // is never taken for the model.
-func (f *Fetcher) download(ctx context.Context, s Spec, e treeEntry, dst string) error {
-	u := f.base() + "/" + s.Repo + "/resolve/main/" + (&url.URL{Path: e.Path}).EscapedPath()
+func (f *Fetcher) download(ctx context.Context, repo string, e treeEntry, dst string) error {
+	u := f.base() + "/" + repo + "/resolve/main/" + (&url.URL{Path: e.Path}).EscapedPath()
 	size, want := e.Size, ""
 	if e.LFS != nil {
 		size, want = e.LFS.Size, e.LFS.OID

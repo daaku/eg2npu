@@ -31,6 +31,9 @@ stay with llama-server.
   the repository lists before it is renamed into place, and a file already
   downloaded is used without the network, so a start does not depend on
   Hugging Face. `mmproj-Q8_0.gguf` ends like the model and is skipped.
+  `FetchFiles` fetches a given list of paths from a repository the same way
+  (bolo uses it for its OpenVINO export); it lives here until `hf` moves to
+  a module of its own.
 - The OpenVINO bindings are `github.com/daaku/openvino` (`~/workspace/openvino`,
   split out of whispy, shared with it). They can read, compile and run a model,
   not build or reshape one, which is why the graph is written as IR text.
