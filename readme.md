@@ -15,11 +15,15 @@ The first start downloads the Q8_0 GGUF from
 (295 MB, checked against its sha256) and compiles it for the NPU. Later starts
 use both from disk. `-model` takes a GGUF you already have instead.
 
-On Arch, `makepkg -si` installs it with a system service:
+On Arch, `makepkg -si` installs it with a system service and socket:
 
 ```sh
-systemctl enable --now eg2npu
+systemctl enable --now eg2npu.socket
 ```
+
+The socket starts the service on the first connection, which waits while the
+model loads (under 2 s once compiled, about 80 s the first time).
+`systemctl enable --now eg2npu` starts it at boot instead.
 
 The service runs as a dynamic user in the `render` group, keeps the model in
 `/var/lib/eg2npu` and the compiled graphs in `/var/cache/eg2npu`, and serves
@@ -38,7 +42,7 @@ either one. The name in `/v1/models` is `embeddinggemma2`, llama-server's
 | `-models` | `$STATE_DIRECTORY/models`, or `models` in the cache | Where `-hf` downloads go |
 | `-model` | | A local EmbeddingGemma 2 GGUF instead of `-hf` (Q8_0 is what khoj uses) |
 | `-device` | `NPU` | `NPU`, `GPU` or `CPU` |
-| `-listen` | `127.0.0.1:8741` | |
+| `-listen` | `127.0.0.1:8741` | Ignored for a socket passed by systemd (`LISTEN_FDS`), or `PORT` or `ADDR` in the environment |
 | `-alias` | `embeddinggemma2` | The name in `/v1/models` |
 | `-cache` | `$CACHE_DIRECTORY` or `~/.cache/eg2npu` | The IR written from the GGUF, and compiled blobs |
 | `-shapes` | `auto` | `static` (one graph per length), `dynamic`, or `auto`: static on the NPU (which needs it) and the GPU (6x faster with it), dynamic on the CPU |

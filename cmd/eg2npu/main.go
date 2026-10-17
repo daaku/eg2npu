@@ -5,11 +5,9 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,6 +19,7 @@ import (
 	"github.com/daaku/eg2npu/eg2"
 	"github.com/daaku/eg2npu/hf"
 	"github.com/daaku/eg2npu/server"
+	"github.com/daaku/lands"
 )
 
 // model adapts eg2.Model to the server.
@@ -69,7 +68,7 @@ func main() {
 		"Hugging Face repository and quantization to download the GGUF from, as llama-server's -hf")
 	models := flag.String("models", modelsDir(), "where -hf downloads are kept")
 	device := flag.String("device", "NPU", "OpenVINO device: NPU, GPU or CPU")
-	listen := flag.String("listen", "127.0.0.1:8741", "where to serve")
+	listen := flag.String("listen", "127.0.0.1:8741", "where to serve, unless systemd passes a socket (LISTEN_FDS) or PORT or ADDR is set")
 	alias := flag.String("alias", "embeddinggemma2", "the model's name in /v1/models: keep llama-server's --alias")
 	cache := flag.String("cache", cacheDir(), "where the IR and the compiled blobs are kept")
 	shapes := flag.String("shapes", "auto", "static (one graph per length, needed by the NPU), dynamic, or auto (dynamic on the CPU only)")
@@ -153,17 +152,10 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("ready", "model", m.Describe(), "seconds", time.Since(started).Round(time.Millisecond).Seconds(),
-		"listen", *listen, "alias", *alias)
+		"alias", *alias)
 
 	srv := &server.Server{Model: model{m}, Alias: *alias, Log: log, Created: time.Now()}
-	httpServer := &http.Server{Addr: *listen, Handler: srv.Handler(), ReadHeaderTimeout: 10 * time.Second}
-	go func() {
-		<-ctx.Done()
-		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		httpServer.Shutdown(shutdown)
-	}()
-	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+	if err := lands.ListenAndServe(ctx, *listen, srv.Handler()); err != nil {
 		log.Error("serving", "error", err)
 		os.Exit(1)
 	}

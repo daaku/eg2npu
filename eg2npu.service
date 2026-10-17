@@ -19,8 +19,9 @@ Environment=XDG_CACHE_HOME=%C/%p/xdg
 ExecStart=/usr/bin/eg2npu \
   -hf unsloth/embeddinggemma-2-GGUF:Q8_0 \
   -device NPU \
-  -lengths 64 \
-  -listen 127.0.0.1:8741
+  -lengths 64
+# The socket comes from eg2npu.socket; started without it, -listen's default
+# 127.0.0.1:8741 is used.
 Restart=on-failure
 NoNewPrivileges=yes
 

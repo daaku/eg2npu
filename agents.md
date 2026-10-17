@@ -138,6 +138,10 @@ lags by tens of seconds, so it is no use for anything shorter than a minute.
   in `CacheDirectory`, and the NPU driver's own cache under
   `XDG_CACHE_HOME`, pointed into the cache directory because a dynamic user's
   home is `/`.
+- `eg2npu.socket` listens on `127.0.0.1:8741` and starts the service on the
+  first connection; `github.com/daaku/lands` picks up the socket
+  (`LISTEN_FDS`), else `PORT`, `ADDR`, then `-listen`, and shuts down on
+  SIGTERM. Connections queue in the socket's backlog while the model loads.
 - The unit runs `-lengths 64`: khojd's queries fit, and every length costs
   about 285 MB on the NPU. It listens on 8741, llama-server's port in khoj's
   setup, so it cannot run beside a llama-server there.

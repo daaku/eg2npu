@@ -32,5 +32,6 @@ package() {
   cd ..
   install -Dm755 eg2npu "$pkgdir/usr/bin/eg2npu"
   install -Dm644 eg2npu.service "$pkgdir/usr/lib/systemd/system/eg2npu.service"
+  install -Dm644 eg2npu.socket "$pkgdir/usr/lib/systemd/system/eg2npu.socket"
   install -Dm644 license "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }
